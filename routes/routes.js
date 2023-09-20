@@ -59,111 +59,251 @@ const formattedDate = formatter.format(new Date());
 //Register Route--------------------------------
 router.post('/register', async (req, res) => {
   try {
-  let firstName = req.body.firstName
-  let lastName = req.body.lastName
-  let userName = req.body.username
-  let password = req.body.password
-  let email = req.body.email
-  let phoneNumber = req.body.phoneNumber
-  let gender = req.body.gender
-  let dob = req.body.dob
-  let age = req.body.age
-  let dtecre = formattedDate
-  let dteLastLogin = formattedDate
-  let dtemod = formattedDate
-  let image = req.body.image
-  let userGroup = 'user'
+    let firstName = req.body.firstName
+    let lastName = req.body.lastName
+    let userName = req.body.username
+    let password = req.body.password
+    let email = req.body.email
+    let phoneNumber = req.body.phoneNumber
+    let gender = req.body.gender
+    let dob = req.body.dob
+    let age = req.body.age
+    let dtecre = formattedDate
+    let dteLastLogin = formattedDate
+    let dtemod = formattedDate
+    let image = req.body.image
+    let userGroup = 'user'
 
 
-  //mail config
-  let config = {
-    service: 'gmail',
-    auth: {
-      user: myEmail,
-      pass: myPassword
+    //mail config
+    let config = {
+      service: 'gmail',
+      auth: {
+        user: myEmail,
+        pass: myPassword
+      }
+    }
+
+    let transporter = nodemailer.createTransport(config)
+
+
+    //Hashed Password
+    const salt = await bcrypt.genSalt(10)
+    const hashedPassword = await bcrypt.hash(password, salt)
+
+    //Email Already Exist Code
+    const email_already_present = await User.findOne({
+      email: email
+    })
+
+    //Username Already Exist Code
+    const username_already_present = await User.findOne({
+      username: userName
+    })
+
+    //Phone Number Already Exist Code
+    const phonenumber_already_present = await User.findOne({
+      phoneNumber: phoneNumber
+    })
+
+    //Email Already Exist Code
+    if (email_already_present) {
+      return res.status(400).send({
+        message: "Your Email is already registered"
+      })
+    }
+
+    //Username Already Exist Code
+    else if (username_already_present) {
+      return res.status(400).send({
+        message: "Your Username is already registered"
+      })
+    }
+
+    //Phone Number Alreadt Exist Code
+    else if (phonenumber_already_present) {
+      return res.status(400).send({
+        message: "Your Phone Number is already registered"
+      })
+    }
+
+    else
+    //If success, then insert data
+    {
+      //Upload File
+      // let fileName = req.body.username + '-' + req.files.image.name;
+      // let newPath = path.join(process.cwd(), 'uploads', fileName)
+      // req.files.image.mv(newPath)
+
+      const user = new User({
+        firstName: firstName,
+        lastName: lastName,
+        username: userName,
+        password: hashedPassword,
+        email: email,
+        phoneNumber: phoneNumber,
+        gender: gender,
+        dob: dob,
+        age: age,
+        dtecre: dtecre,
+        dteLastLogin: dteLastLogin,
+        dtemod: dtemod,
+        profilePic: image,
+        userGroup: userGroup
+      })
+
+      let date = user.dtecre;
+
+      //Email Format Config
+      const mailOPtions = {
+        from: myEmail,
+        to: user.email,
+        subject: 'Welcome to Rony Inc',
+        text:
+          `Welcome ${user.firstName}.
+Enjoy your stay here.
+Your account was registered on ${date}.
+    
+
+Thanks,
+Rony Inc`
+      }
+
+      //Sending the email
+      transporter.sendMail(mailOPtions, (err, info) => {
+        if (err) {
+
+        }
+        else {
+          // console.log(info)
+        }
+      })
+
+      //Saves the data in the DB
+      const result = await user.save()
+
+      //JWT token
+      const { _id } = await result.toJSON()
+      const token = jwt.sign({ _id: _id }, jwt_key)
+
+
+
+      //Creates a JWT token in the cookies
+      res.cookie("jwt", token, {
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000
+      })
+
+
+      //Sending Response
+      res.json({
+        message: `User ${result.username} is Registered.`,
+        token: token
+      })
     }
   }
-
-  let transporter = nodemailer.createTransport(config)
-
-
-  //Hashed Password
-  const salt = await bcrypt.genSalt(10)
-  const hashedPassword = await bcrypt.hash(password, salt)
-
-  //Email Already Exist Code
-  const email_already_present = await User.findOne({
-    email: email
-  })
-
-  //Username Already Exist Code
-  const username_already_present = await User.findOne({
-    username: userName
-  })
-
-  //Phone Number Already Exist Code
-  const phonenumber_already_present = await User.findOne({
-    phoneNumber: phoneNumber
-  })
-
-  //Email Already Exist Code
-  if (email_already_present) {
-    return res.status(400).send({
-      message: "Your Email is already registered"
-    })
+  catch (error) {
+    // Handle errors
+    res.status(500).json({ message: 'An error occurred during registration.' });
   }
+})
 
-  //Username Already Exist Code
-  else if (username_already_present) {
-    return res.status(400).send({
-      message: "Your Username is already registered"
+
+//Login Route--------------------------------
+router.post("/login", async (req, res) => {
+  try {
+    //Username property of the req will have either username or password.
+    //This below code checks that if the data present in username property is present in username or email field in db
+    const user = await User.findOne({
+      $or: [{ username: req.body.username }, { email: req.body.username }],
+    });
+
+    //If response is returns nothing, then the code for bcrypt compare code will give error as it cannot handle if user.password is NULL
+    if (!user) {
+      return res.status(400).send({
+        message: "Invalid credentials"
+      })
+    }
+
+    //Hashes the password in the request and compares it to the password in the db
+    if (!(await bcrypt.compare(req.body.password, user.password))) {
+      return res.status(400).send({
+        message: "Invalid credentials"
+      })
+    }
+
+    //JWT token
+    const token = jwt.sign({ _id: user._id }, jwt_key)
+
+
+    //Creates a JWT token in the cookies
+    res.cookie("jwt", token, {
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: "none", // Adjust as needed
+      secure: true, // Required for 'None'
     })
+
+
+    res.status(200).send({ token })
   }
-
-  //Phone Number Alreadt Exist Code
-  else if (phonenumber_already_present) {
-    return res.status(400).send({
-      message: "Your Phone Number is already registered"
-    })
+  catch (error) {
+    // Handle errors
+    res.status(500).json({ message: 'An error occurred during login.' });
   }
+})
 
-  else
-  //If success, then insert data
-  {
-    //Upload File
-    // let fileName = req.body.username + '-' + req.files.image.name;
-    // let newPath = path.join(process.cwd(), 'uploads', fileName)
-    // req.files.image.mv(newPath)
 
-    const user = new User({
-      firstName: firstName,
-      lastName: lastName,
-      username: userName,
-      password: hashedPassword,
-      email: email,
-      phoneNumber: phoneNumber,
-      gender: gender,
-      dob: dob,
-      age: age,
-      dtecre: dtecre,
-      dteLastLogin: dteLastLogin,
-      dtemod: dtemod,
-      profilePic: image,
-      userGroup: userGroup
-    })
+//ForgotPassword Route--------------------------------
+router.post("/forgotPassword", async (req, res) => {
+  try {
 
-    let date = user.dtecre;
+    //Username property of the req will have either username or password.
+    //This below code checks that if the data present in username property is present in username or email field in db
+    const user = await User.findOne({
+      email: req.body.email
+    });
+
+    //If response is returns nothing, then the code for bcrypt compare code will give error as it cannot handle if user.password is NULL
+    if (!user) {
+      return res.status(400).send({
+        message: "Incorrect email"
+      })
+    }
+
+    //User exist amd mpw create a One time link and valid for 15 min
+    const secret = jwt_key + user.password
+    const payload = {
+      email: user.email,
+      id: user.username
+    }
+    const token = jwt.sign(payload, secret, { expiresIn: '59m' })
+
+    const link = `${frontEndConnectionString}/reset-password/${user.username}/${token}`
+
+    //mail config
+    let config = {
+      service: 'gmail',
+      auth: {
+        user: myEmail,
+        pass: myPassword
+      }
+    }
+
+    let transporter = nodemailer.createTransport(config)
 
     //Email Format Config
     const mailOPtions = {
       from: myEmail,
       to: user.email,
-      subject: 'Welcome to Rony Inc',
+      subject: 'Rony Inc Password Reset',
       text:
-        `Welcome ${user.firstName}.
-Enjoy your stay here.
-Your account was registered on ${date}.
-    
+        `Hello ${user.firstName}.
+Please click the link below to reset your password:
+${link}
+
+Please take notice that your link will expire in 15 minutes.
+
 
 Thanks,
 Rony Inc`
@@ -179,154 +319,16 @@ Rony Inc`
       }
     })
 
-    //Saves the data in the DB
-    const result = await user.save()
-
-    //JWT token
-    const { _id } = await result.toJSON()
-    const token = jwt.sign({ _id: _id }, jwt_key)
-
-
-
-    //Creates a JWT token in the cookies
-    res.cookie("jwt", token, {
-      httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000
-    })
-
-
-    //Sending Response
     res.json({
-      message: `User ${result.username} is Registered.`,
-      token: token
+      message: 'Password resent link has been sent to your email',
+      token: token,
+      username: user.username
     })
-  }
-}
-catch (error) {
-  // Handle errors
-  res.status(500).json({ message: 'An error occurred during registration.' });
-}
-})
-
-
-//Login Route--------------------------------
-router.post("/login", async (req, res) => {
-  try{
-  //Username property of the req will have either username or password.
-  //This below code checks that if the data present in username property is present in username or email field in db
-  const user = await User.findOne({
-    $or: [{ username: req.body.username }, { email: req.body.username }],
-  });
-
-  //If response is returns nothing, then the code for bcrypt compare code will give error as it cannot handle if user.password is NULL
-  if (!user) {
-    return res.status(400).send({
-      message: "Invalid credentials"
-    })
-  }
-
-  //Hashes the password in the request and compares it to the password in the db
-  if (!(await bcrypt.compare(req.body.password, user.password))) {
-    return res.status(400).send({
-      message: "Invalid credentials"
-    })
-  }
-
-  //JWT token
-  const token = jwt.sign({ _id: user._id }, jwt_key)
-
-
-  //Creates a JWT token in the cookies
-  res.cookie("jwt", token, {
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000
-  })
-
-
-  res.status(200).send({ token })
   }
   catch (error) {
     // Handle errors
-    res.status(500).json({ message: 'An error occurred during login.' });
+    res.status(500).json({ message: 'An error occurred during generating your forgot password link.' });
   }
-})
-
-
-//ForgotPassword Route--------------------------------
-router.post("/forgotPassword", async (req, res) => {
-  try{
-
-  //Username property of the req will have either username or password.
-  //This below code checks that if the data present in username property is present in username or email field in db
-  const user = await User.findOne({
-    email: req.body.email
-  });
-
-  //If response is returns nothing, then the code for bcrypt compare code will give error as it cannot handle if user.password is NULL
-  if (!user) {
-    return res.status(400).send({
-      message: "Incorrect email"
-    })
-  }
-
-  //User exist amd mpw create a One time link and valid for 15 min
-  const secret = jwt_key + user.password
-  const payload = {
-    email: user.email,
-    id: user.username
-  }
-  const token = jwt.sign(payload, secret, { expiresIn: '59m' })
-
-  const link = `${frontEndConnectionString}/reset-password/${user.username}/${token}`
-
-  //mail config
-  let config = {
-    service: 'gmail',
-    auth: {
-      user: myEmail,
-      pass: myPassword
-    }
-  }
-
-  let transporter = nodemailer.createTransport(config)
-
-  //Email Format Config
-  const mailOPtions = {
-    from: myEmail,
-    to: user.email,
-    subject: 'Rony Inc Password Reset',
-    text:
-      `Hello ${user.firstName}.
-Please click the link below to reset your password:
-${link}
-
-Please take notice that your link will expire in 15 minutes.
-
-
-Thanks,
-Rony Inc`
-  }
-
-  //Sending the email
-  transporter.sendMail(mailOPtions, (err, info) => {
-    if (err) {
-
-    }
-    else {
-      // console.log(info)
-    }
-  })
-
-  res.json({
-    message: 'Password resent link has been sent to your email',
-    token: token,
-    username: user.username
-  })
-}
-catch (error) {
-  // Handle errors
-  res.status(500).json({ message: 'An error occurred during generating your forgot password link.' });
-}
 })
 
 
@@ -386,86 +388,86 @@ router.get('/reset-password/:username/:token', async (req, res) => {
 
 //Reset Password PUT--------------------------------
 router.put('/resetPassword', async (req, res) => {
-  try{
-  const user = await User.findOne({
-    username: req.body.username,
-  });
+  try {
+    const user = await User.findOne({
+      username: req.body.username,
+    });
 
-  //Hashed Password
-  const salt = await bcrypt.genSalt(10)
-  const hashedPassword = await bcrypt.hash(req.body.password, salt)
+    //Hashed Password
+    const salt = await bcrypt.genSalt(10)
+    const hashedPassword = await bcrypt.hash(req.body.password, salt)
 
-  // If response is returns nothing, then the code for bcrypt compare code will give error as it cannot handle if user.password is NULL
-  // NOTE: Below if else code is only for Testing with POSTMAN. We don't need if else block here as in Angular, the check is already done
-  if (!user) {
-    return res.status(400).send({
-      message: "Invalid credentials error which came for Password Update"
-    })
-  }
-  else if ((await bcrypt.compare(req.body.password, user.password))) {
-    return res.status(400).send({
-      message: "Old password cannot be the new password"
-    })
-  }
-  else {
-    // Use the user's _id to identify the document to update
-    const filter = { username: user.username };
+    // If response is returns nothing, then the code for bcrypt compare code will give error as it cannot handle if user.password is NULL
+    // NOTE: Below if else code is only for Testing with POSTMAN. We don't need if else block here as in Angular, the check is already done
+    if (!user) {
+      return res.status(400).send({
+        message: "Invalid credentials error which came for Password Update"
+      })
+    }
+    else if ((await bcrypt.compare(req.body.password, user.password))) {
+      return res.status(400).send({
+        message: "Old password cannot be the new password"
+      })
+    }
+    else {
+      // Use the user's _id to identify the document to update
+      const filter = { username: user.username };
 
-    let data = await User.updateOne(
-      //{}condition
-      filter,
-      {
-        //set updated data
-        $set: {
-          password: hashedPassword,
-          dtemod: formattedDate
+      let data = await User.updateOne(
+        //{}condition
+        filter,
+        {
+          //set updated data
+          $set: {
+            password: hashedPassword,
+            dtemod: formattedDate
+          }
+        }
+      )
+
+      //Sent Mail
+      //mail config
+      let config = {
+        service: 'gmail',
+        auth: {
+          user: myEmail,
+          pass: myPassword
         }
       }
-    )
 
-    //Sent Mail
-    //mail config
-    let config = {
-      service: 'gmail',
-      auth: {
-        user: myEmail,
-        pass: myPassword
-      }
-    }
+      let transporter = nodemailer.createTransport(config)
 
-    let transporter = nodemailer.createTransport(config)
-
-    //Email Format Config
-    const mailOPtions = {
-      from: myEmail,
-      to: user.email,
-      subject: 'Rony Inc Password Reset Successfull',
-      text:
-        `Hello ${user.firstName}.
+      //Email Format Config
+      const mailOPtions = {
+        from: myEmail,
+        to: user.email,
+        subject: 'Rony Inc Password Reset Successfull',
+        text:
+          `Hello ${user.firstName}.
 Your password has been succesfully reset.
 
 Thanks,
 Rony Inc`
+      }
+
+      //Sending the email
+      transporter.sendMail(mailOPtions, (err, info) => {
+        if (err) {
+        }
+        else {
+          // console.log(info)
+        }
+      })
+
+      res.status(200).send({
+        message: "Password updated successfully"
+      });
     }
-
-    //Sending the email
-    transporter.sendMail(mailOPtions, (err, info) => {
-      if (err) {
-      }
-      else {
-        // console.log(info)
-      }
-    })
-
-    res.status(200).send({
-      message: "Password updated successfully"
-    });
   }
-}
-catch (error) {
-  // Handle errors
-  res.status(500).json({ message: 'An error occurred during password reset.' });
-}
+  catch (error) {
+    // Handle errors
+    res.status(500).json({ message: 'An error occurred during password reset.' });
+  }
 
 })
 
@@ -493,7 +495,7 @@ router.get('/user', async (req, res) => {
 
     data1 = Object.assign(data, cookie_obj);
     res.send(data1)
-  } 
+  }
   catch (err) {
     return res.status(401).send({
       message: "unauthenticated"
@@ -550,17 +552,17 @@ router.put('/lastLoginUpdate', async (req, res) => {
 
 //Logout Route--------------------------------
 router.post('/logout', (req, res) => {
-  try{
-  res.cookie("jwt", "", { maxAge: 0 })
+  try {
+    res.cookie("jwt", "", { maxAge: 0 })
 
-  res.send({
-    message: "success"
-  })
-}
-catch (error) {
-  // Handle errors
-  res.status(500).json({ message: 'An error occurred during logout.' });
-}
+    res.send({
+      message: "success"
+    })
+  }
+  catch (error) {
+    // Handle errors
+    res.status(500).json({ message: 'An error occurred during logout.' });
+  }
 })
 
 
@@ -625,7 +627,7 @@ Error is : ${error}
 Thanks,
 Rony Inc`,
     };
-  
+
     try {
       await transporter.sendMail(mailOptionsToMe);
     } catch (error) {
