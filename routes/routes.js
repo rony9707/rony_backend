@@ -1,5 +1,7 @@
 const { Router } = require('express')
 
+const router = Router()
+
 const bcrypt = require('bcryptjs')
 
 const jwt = require('jsonwebtoken')
@@ -8,19 +10,16 @@ const User = require('../models/user')
 
 require('dotenv').config()
 
-const router = Router()
-
-jwt_key = process.env.jwt
-
-const moment = require('moment');
-
 const nodemailer = require('nodemailer')
+
+const fs = require('fs');
 
 
 
 myEmail = process.env.email
 myPassword = process.env.password
 frontEndConnectionString = process.env.frontEndConnectionString
+jwt_key = process.env.jwt
 
 //Date Variables
 const options = {
@@ -38,10 +37,28 @@ const options = {
 const formatter = new Intl.DateTimeFormat('en-US', options);
 const formattedDate = formatter.format(new Date());
 
+// // Define the storage for uploaded files
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, 'uploads/'); // Specify the directory where the uploaded images will be stored
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, Date.now() + '-' + file.originalname);
+//   },
+// });
 
+// const upload = multer({ storage: storage });
+
+// router.use(fileUpload({
+//   useTempFiles: false,
+//   tempFileDIR: 'uploads/'
+// }))
+
+// const path = require('path')
 
 //Register Route--------------------------------
 router.post('/register', async (req, res) => {
+  try {
   let firstName = req.body.firstName
   let lastName = req.body.lastName
   let userName = req.body.username
@@ -54,7 +71,8 @@ router.post('/register', async (req, res) => {
   let dtecre = formattedDate
   let dteLastLogin = formattedDate
   let dtemod = formattedDate
-
+  let image = req.body.image
+  let userGroup = 'user'
 
 
   //mail config
@@ -101,15 +119,22 @@ router.post('/register', async (req, res) => {
       message: "Your Username is already registered"
     })
   }
+
   //Phone Number Alreadt Exist Code
   else if (phonenumber_already_present) {
     return res.status(400).send({
       message: "Your Phone Number is already registered"
     })
   }
+
   else
   //If success, then insert data
   {
+    //Upload File
+    // let fileName = req.body.username + '-' + req.files.image.name;
+    // let newPath = path.join(process.cwd(), 'uploads', fileName)
+    // req.files.image.mv(newPath)
+
     const user = new User({
       firstName: firstName,
       lastName: lastName,
@@ -122,7 +147,9 @@ router.post('/register', async (req, res) => {
       age: age,
       dtecre: dtecre,
       dteLastLogin: dteLastLogin,
-      dtemod: dtemod
+      dtemod: dtemod,
+      profilePic: image,
+      userGroup: userGroup
     })
 
     let date = user.dtecre;
@@ -152,7 +179,7 @@ Rony Inc`
       }
     })
 
-
+    //Saves the data in the DB
     const result = await user.save()
 
     //JWT token
@@ -174,15 +201,17 @@ Rony Inc`
       token: token
     })
   }
+}
+catch (error) {
+  // Handle errors
+  res.status(500).json({ message: 'An error occurred during registration.' });
+}
 })
-
-
-
 
 
 //Login Route--------------------------------
 router.post("/login", async (req, res) => {
-
+  try{
   //Username property of the req will have either username or password.
   //This below code checks that if the data present in username property is present in username or email field in db
   const user = await User.findOne({
@@ -215,14 +244,17 @@ router.post("/login", async (req, res) => {
 
 
   res.status(200).send({ token })
-
-
-
+  }
+  catch (error) {
+    // Handle errors
+    res.status(500).json({ message: 'An error occurred during login.' });
+  }
 })
 
 
 //ForgotPassword Route--------------------------------
 router.post("/forgotPassword", async (req, res) => {
+  try{
 
   //Username property of the req will have either username or password.
   //This below code checks that if the data present in username property is present in username or email field in db
@@ -285,19 +317,21 @@ Rony Inc`
     }
   })
 
-
-
   res.json({
     message: 'Password resent link has been sent to your email',
     token: token,
     username: user.username
   })
+}
+catch (error) {
+  // Handle errors
+  res.status(500).json({ message: 'An error occurred during generating your forgot password link.' });
+}
 })
 
 
 //Reset Password GET--------------------------------
 router.get('/reset-password/:username/:token', async (req, res) => {
-
   const { username, token } = req.params;
   // Your password reset logic here...
 
@@ -317,8 +351,6 @@ router.get('/reset-password/:username/:token', async (req, res) => {
       message: "Invalid Email"
     })
   }
-
-
 
   if (response.username != user.username) {
     res.send('Invalid ID')
@@ -350,21 +382,18 @@ router.get('/reset-password/:username/:token', async (req, res) => {
   } catch (err) {
   }
 
-
 })
 
 //Reset Password PUT--------------------------------
 router.put('/resetPassword', async (req, res) => {
+  try{
   const user = await User.findOne({
     username: req.body.username,
   });
 
-
   //Hashed Password
   const salt = await bcrypt.genSalt(10)
   const hashedPassword = await bcrypt.hash(req.body.password, salt)
-
-
 
   // If response is returns nothing, then the code for bcrypt compare code will give error as it cannot handle if user.password is NULL
   // NOTE: Below if else code is only for Testing with POSTMAN. We don't need if else block here as in Angular, the check is already done
@@ -381,7 +410,6 @@ router.put('/resetPassword', async (req, res) => {
   else {
     // Use the user's _id to identify the document to update
     const filter = { username: user.username };
-
 
     let data = await User.updateOne(
       //{}condition
@@ -429,14 +457,18 @@ Rony Inc`
       }
     })
 
-
-
     res.status(200).send({
       message: "Password updated successfully"
     });
   }
+}
+catch (error) {
+  // Handle errors
+  res.status(500).json({ message: 'An error occurred during password reset.' });
+}
 
 })
+
 
 //User Route--------------------------------
 router.get('/user', async (req, res) => {
@@ -454,14 +486,15 @@ router.get('/user', async (req, res) => {
       })
     }
 
-
     const user = await User.findOne({ _id: claims._id })
 
     const { password, ...data } = await user.toJSON()
+    // const imageBase64 = fs.readFileSync(data.profilePic, { encoding: 'base64' });
+
     data1 = Object.assign(data, cookie_obj);
     res.send(data1)
-
-  } catch (err) {
+  } 
+  catch (err) {
     return res.status(401).send({
       message: "unauthenticated"
     })
@@ -472,10 +505,12 @@ router.get('/user', async (req, res) => {
 //Update Last Login Route--------------------------------
 router.put('/lastLoginUpdate', async (req, res) => {
 
+  const lastLogin = formatter.format(new Date());
+
+
   const user = await User.findOne({
     username: req.body.username,
   });
-
   //If response is returns nothing, then the code for bcrypt compare code will give error as it cannot handle if user.password is NULL
   //NOTE: Below if else code is only for Testing with POSTMAN. We don't need if else block here as in Angular, the check is already done
   // if (!user) {
@@ -485,26 +520,28 @@ router.put('/lastLoginUpdate', async (req, res) => {
   // }
   // else {
 
-
   // Use the user's _id to identify the document to update
   const filter = { username: user.username };
+
+
   let data = await User.updateOne(
     //{}condition
     filter,
     {
       //set updated data
-      $set: { dteLastLogin: formattedDate }
+      $set: { dteLastLogin: lastLogin }
     }
   )
 
 
 
+
   //NOTE: Below if else code is only for Testing with POSTMAN.
-  // res.status(200).send({
-  //   message: "Updated successful",
-  //   data
-  // });
-  // }
+  res.status(200).send({
+    message: "Updated successful",
+    data
+  });
+
 
 
 })
@@ -513,13 +550,145 @@ router.put('/lastLoginUpdate', async (req, res) => {
 
 //Logout Route--------------------------------
 router.post('/logout', (req, res) => {
+  try{
   res.cookie("jwt", "", { maxAge: 0 })
 
   res.send({
     message: "success"
   })
+}
+catch (error) {
+  // Handle errors
+  res.status(500).json({ message: 'An error occurred during logout.' });
+}
 })
 
+
+//Sent Birthday EMail to users
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: myEmail,
+    pass: myPassword,
+  },
+});
+
+async function checkBirthday() {
+  try {
+    const today = new Date();
+    const currentMonth = today.getMonth() + 1; // Months are zero-based, so add 1 to get the current month
+    const currentDay = today.getDate();
+
+    const usersWithBirthdaysToday = await User.find({
+      $expr: {
+        $and: [
+          { $eq: [{ $month: '$dob' }, currentMonth] },
+          { $eq: [{ $dayOfMonth: '$dob' }, currentDay] },
+        ],
+      },
+    }).select('dob email username');
+
+
+    if (usersWithBirthdaysToday.length > 0) {
+
+      for (const user of usersWithBirthdaysToday) {
+        await sendBirthdayEmail(user);
+        await sendBirthdayNotificationToMe(user);
+      }
+    } else {
+
+      await sendNoBirthdayNotification();
+    }
+
+    // Calculate the time until the next 12 AM
+    const now = new Date();
+    const timeUntilNextMidnight = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1,
+      0, // 0 hours (midnight)
+      0, // 0 minutes
+      0 // 0 seconds
+    ) - now;
+
+    // Set a timeout to run the function again at the next 12 AM
+    setTimeout(checkBirthday, timeUntilNextMidnight);
+  } catch (error) {
+
+    const mailOptionsToMe = {
+      from: myEmail,
+      to: myEmail,
+      subject: 'Error during Birthday',
+      text: `Hello,
+There was a error for the check birthday function.
+Error is : ${error}
+Thanks,
+Rony Inc`,
+    };
+  
+    try {
+      await transporter.sendMail(mailOptionsToMe);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+}
+
+async function sendBirthdayEmail(user) {
+  const mailOptionsUser = {
+    from: myEmail,
+    to: user.email,
+    subject: 'Happy Birthday',
+    text: `Happy Birthday to you.`,
+  };
+
+  try {
+    await transporter.sendMail(mailOptionsUser);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function sendBirthdayNotificationToMe(user) {
+  const mailOptionsToMe = {
+    from: myEmail,
+    to: myEmail,
+    subject: 'User Birthday Notification',
+    text: `Hello,
+Today is ${user.username}'s Birthday.
+
+Thanks,
+Rony Inc`,
+  };
+
+  try {
+    await transporter.sendMail(mailOptionsToMe);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function sendNoBirthdayNotification() {
+  const mailOptionsToMe = {
+    from: myEmail,
+    to: myEmail,
+    subject: `No free food today`,
+    text: `Hello,
+No one has a birthday today.
+
+Thanks,
+Rony Inc`,
+  };
+
+  try {
+    await transporter.sendMail(mailOptionsToMe);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Initial call to start checking at 12 AM today
+checkBirthday();
 
 
 

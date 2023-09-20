@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema({
     required:true
   },
   phoneNumber:{
-    type: Number,  
+    type: String,  
     required:true
   },
   gender:{
@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema({
     required:true
   },
   dob:{
-    type:String,
+    type:Date,
     required:true
   },
   age:{
@@ -50,6 +50,14 @@ const userSchema = new mongoose.Schema({
   dteLastLogin:{
     type:String,
     required:true
+  },
+  profilePic:{
+    type:String,
+    required:true
+  },
+  userGroup:{
+    type:String,
+    required:false
   }
 })
 
