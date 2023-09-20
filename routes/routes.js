@@ -191,7 +191,9 @@ Rony Inc`
       //Creates a JWT token in the cookies
       res.cookie("jwt", token, {
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000
+        maxAge: 24 * 60 * 60 * 1000,
+        sameSite: "none", // Adjust as needed
+        secure: true, // Required for 'None'
       })
 
 
