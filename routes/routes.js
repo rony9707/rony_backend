@@ -605,18 +605,31 @@ async function checkBirthday() {
     }
 
     // Calculate the time until the next 12 AM
-    const now = new Date();
-    const timeUntilNextMidnight = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate() + 1,
+    // Set the timezone to IST (Indian Standard Time)
+    const istOptions = { timeZone: 'Asia/Kolkata' };
+
+    // Get the current date and time in IST
+    const nowIST = new Date().toLocaleString('en-US', istOptions);
+
+    // Parse the IST date string back into a Date object
+    const nowISTDate = new Date(nowIST);
+
+    // Calculate the time until the next midnight in IST
+    const midnightIST = new Date(
+      nowISTDate.getFullYear(),
+      nowISTDate.getMonth(),
+      nowISTDate.getDate() + 1,
       0, // 0 hours (midnight)
       0, // 0 minutes
-      0 // 0 seconds
-    ) - now;
+      0, // 0 seconds
+    );
+
+    const timeUntilNextMidnightIST = midnightIST.getTime() - nowISTDate.getTime();
+
+    console.log(timeUntilNextMidnightIST);
 
     // Set a timeout to run the function again at the next 12 AM
-    setTimeout(checkBirthday, timeUntilNextMidnight);
+    setTimeout(checkBirthday, timeUntilNextMidnightIST);
   } catch (error) {
 
     const mailOptionsToMe = {
