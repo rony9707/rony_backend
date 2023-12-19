@@ -508,7 +508,6 @@ router.get('/user', async (req, res) => {
 
 //Update Last Login Route--------------------------------
 router.put('/lastLoginUpdate', async (req, res) => {
-  console.log(req)
   const formatter = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'long',
@@ -521,7 +520,6 @@ router.put('/lastLoginUpdate', async (req, res) => {
   });
   
   const lastLogin = formatter.format(new Date());
-  console.log("last login", lastLogin);
 
 
   const user = await User.findOne({
