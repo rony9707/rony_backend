@@ -508,8 +508,20 @@ router.get('/user', async (req, res) => {
 
 //Update Last Login Route--------------------------------
 router.put('/lastLoginUpdate', async (req, res) => {
-
+  console.log(req)
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: true, // Set this option to true for 12-hour format
+    timeZone: 'Asia/Kolkata', // Set your desired time zone
+  });
+  
   const lastLogin = formatter.format(new Date());
+  console.log("last login", lastLogin);
 
 
   const user = await User.findOne({
